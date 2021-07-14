@@ -3,4 +3,6 @@
 
 <p>If you would like an already built application (using pyinstaller) send me a request and I can send you a link to a google drive for download</p><br>
 
-<p> to access the user-manual please visit [https://dillonhaughton.github.io/Learn_Forget_Memorize/] (https://dillonhaughton.github.io/Learn_Forget_Memorize/) </p>
+<p> to access the user-manual please visit https://dillonhaughton.github.io/Learn_Forget_Memorize/</p>
+
+<p>Ideally freezing this application is the best way of running it. Please note I use this application exclusively on Mac and am not sure of its viability in other computer operationg systems. You can also download the repository and run the application with <code>python3 main_GUI.py</code></p>
