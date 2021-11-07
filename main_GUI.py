@@ -297,6 +297,16 @@ def update_function_adjust(forgetting_times, A, B):
 def exponential_test(t, alpha, b):
 	return np.exp(alpha*t) + b
 
+#---------------------------------------
+def frame_to_listframe(dataframe):
+	grob = []
+	for i in range(len(dataframe)):
+		row = dataframe.iloc[i,:].squeeze()
+		grob += [row]
+
+	return grob	
+
+
 #=========================================
 #	           Updaters
 #=========================================			
@@ -1562,6 +1572,7 @@ class test1(Wig.QWidget):
 		#try:
 		if self.start_butt.text() == 'Start':
 			self.frame = self.test
+			#print(type(self.frame[0]))
 			self.score  = 0
 			self.anti_score = 0
 			self.marker = 0
@@ -1598,11 +1609,12 @@ class test1(Wig.QWidget):
 		else:
 				
 				# Here is the scoring section
+			
 			writer_call = data_writer(self.call_classes, self.call_subject)
 			writer_call.completed_test(self.test, self.rearrange, self.score/self.anti_score)
 			self.close()
 			self.screen.repaint()
-		
+			
 
 	def flipper(self):
 		if self.flip == 0:
@@ -1799,6 +1811,345 @@ class test1(Wig.QWidget):
 			self.flip_button.repaint()	
 
 
+#-----------------------------------------
+class test_for_giant_test(Wig.QMainWindow):
+	def __init__(self, dataframe):
+		super().__init__()
+		self.x, self.y, self.w, self.h = 0, 0, 1200, 1000
+		self.setGeometry(self.x, self.y, self.w, self.h)
+		self.setWindowTitle("Testing") # Window Title
+		self.window = test_for_giant_test1(dataframe)
+		self.setCentralWidget(self.window)
+
+class test_for_giant_test1(Wig.QWidget):
+	def __init__(self, dataframe):
+		super().__init__()
+		grid1 = Wig.QGridLayout()
+		grid2 = Wig.QGridLayout()
+		grid3 = Wig.QGridLayout()
+		vlay  = Wig.QVBoxLayout(self)
+
+		#self.call_classes = classes
+		#self.call_subject = subjects
+		#self.report = report
+
+		#call = data_reader(classes, [subjects])
+		#Update
+		#call2 = call.prepare_test()
+		self.test = dataframe
+		
+		#print(self.test)
+		#self.rearrange = call2[1]
+		self.total_amount = len(self.test)
+		self.on = 0
+
+
+		self.class_lab = Wig.QLabel('GIANT TEST: {}/{}'.format(self.on, self.total_amount))
+		self.class_lab.setFixedHeight(10)
+		self.class_lab.setAlignment(Qt.Qt.AlignCenter)
+
+		self.start_butt = Wig.QPushButton('Start')
+		self.start_butt.clicked.connect(self.start_test)
+
+		self.screen = Wig.QLabel()
+		self.settings = access_settings(R'settings.csv', change=0)
+		font = int(self.settings['text_size'].values[0])
+
+		self.screen.setStyleSheet(' font-size: {}px; '.format(font))
+
+		self.screen.setWordWrap(True)
+		self.screen.setAlignment(Qt.Qt.AlignCenter)
+		self.screen.setSizePolicy(Wig.QSizePolicy.Expanding, Wig.QSizePolicy.Expanding)
+
+		scroll = Wig.QScrollArea()
+		scroll.setWidget(self.screen)
+		scroll.setWidgetResizable(True)
+
+		self.flip_button       = Wig.QPushButton('FLIP')
+		self.flip_button.clicked.connect(self.flipper)
+		self.flip_button.setFixedHeight(20)
+
+		self.num_correct = Wig.QLineEdit(self)
+		self.num_correct.setFixedHeight(20)
+		self.num_correct.setFixedWidth(100)
+		self.num_incorrect = Wig.QLineEdit(self)
+		self.num_incorrect.setFixedHeight(20)
+		self.num_incorrect.setFixedWidth(100)
+
+		incorrect  = Wig.QPushButton('Wrong')
+		incorrect.setFixedWidth(100)
+		incorrect.clicked.connect(self.incorrect_store)
+
+		shortcut1 = Wig.QShortcut(GUI.QKeySequence("Shift+Left"),self)
+		shortcut1.activated.connect(self.incorrect_store)
+
+		correct    = Wig.QPushButton('Correct')
+		correct.setFixedWidth(100)
+		correct.clicked.connect(self.correct_store)
+
+		shortcut2 = Wig.QShortcut(GUI.QKeySequence("Shift+Right"),self)
+		shortcut2.activated.connect(self.correct_store)
+
+		shortcut3 = Wig.QShortcut(GUI.QKeySequence("Shift+Down"),self)
+		shortcut3.activated.connect(self.flipper)
+
+		grid1.addWidget(self.class_lab,0,0)
+		grid1.addWidget(self.start_butt,1,0)
+
+		grid3.addWidget(incorrect,0,0)
+		grid3.addWidget(scroll,0,1)
+		grid3.addWidget(correct,0,2)
+
+		grid2.addWidget(self.num_incorrect,0,0)
+		grid2.addWidget(self.flip_button,0,1)
+		grid2.addWidget(self.num_correct,0,2)
+
+		vlay.addLayout(grid1)
+		vlay.addLayout(grid3)
+		vlay.addLayout(grid2)
+
+	def start_test(self):
+		#try:
+		if self.start_butt.text() == 'Start':
+			self.frame = self.test
+			self.score  = 0
+			self.anti_score = 0
+			self.marker = 0
+			self.flip   = 0
+
+			bottom_side = list(self.frame[self.marker].index)[1]
+			self.flip_button.setText(bottom_side)
+			self.flip_button.repaint()
+				# Now I need the screen to recognize pdfs based on path
+			if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
+				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+
+				pixmap = GUI.QPixmap(space)
+				pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
+				self.screen.setPixmap(pixmap)
+				self.screen.setScaledContents(True)
+				self.screen.repaint()
+
+			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
+				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				helper = subprocess.call(['open' , space])
+
+			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
+				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				playsound.playsound(space)
+				
+			else:	
+				self.screen.setText(self.frame[self.marker].iloc[0])
+				self.screen.repaint()
+			self.on += 1	
+
+			self.class_lab.setText('GIANT TEST: {}/{}'.format(self.on, self.total_amount))	
+			self.start_butt.setText('Score')
+			self.start_butt.repaint()
+		else:
+				
+				# Here is the scoring section
+			
+			final = self.score/self.anti_score
+			self.class_lab.setText(str(final))	
+			#self.close()
+			#self.screen.repaint()
+			
+
+	def flipper(self):
+		if self.flip == 0:
+			if self.frame[self.marker].iloc[1].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[1])
+
+					pixmap = GUI.QPixmap(space)
+					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
+					self.screen.setPixmap(pixmap)
+					self.screen.setScaledContents(True)
+					self.screen.repaint()
+
+			elif self.frame[self.marker].iloc[1].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[1].split('.')[-1] == 'mp4':
+				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[1])
+				helper = subprocess.call(['open' , space])	
+
+			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[1].split('.')[-1] == 'MP3':
+				# Problems with different langauge paths
+				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[1])
+				playsound.playsound(space)	
+
+			else:	
+				self.screen.setText(self.frame[self.marker].iloc[1])
+				self.screen.repaint()
+
+			top_side = list(self.frame[self.marker].index)[0]
+			self.flip_button.setText(top_side)
+			self.flip_button.repaint()
+			self.flip = 1
+
+		else:
+			if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+
+					pixmap = GUI.QPixmap(space)
+					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
+					self.screen.setPixmap(pixmap)
+					self.screen.setScaledContents(True)
+					self.screen.repaint()
+
+			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
+				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				helper = subprocess.call(['open' , space])
+
+			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
+				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				playsound.playsound(space)	
+						
+			else:	
+				self.screen.setText(self.frame[self.marker].iloc[0])
+				self.screen.repaint()
+			bottom_side = list(self.frame[self.marker].index)[1]
+			self.flip_button.setText(bottom_side)
+			self.flip_button.repaint()
+			self.flip = 0
+				
+	def incorrect_store(self):
+		if self.screen.text() == 'Finished':
+			pass
+		else:	
+			self.flip = 0
+			# This section is to set up the points
+			try:
+				if self.flip_button.text() == 'question' or self.flip_button.text() == 'answer':
+					# OUTDATED no questions or answers anymore
+					n_i = int(self.num_incorrect.text())
+					n_c = int(self.num_correct.text())
+					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
+					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+				else:	
+					n_i = int(self.num_incorrect.text())
+					n_c = int(self.num_correct.text())
+					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
+					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+					self.score = self.score + n_c
+					self.anti_score = self.anti_score + n_i
+
+					self.num_incorrect.clear()
+					self.num_correct.clear()
+	
+
+			except:
+				if self.flip_button.text() == 'question' or self.flip_button.text() == 'answer':
+					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + 1
+				else:	
+					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + 1
+					self.anti_score = self.anti_score + 1
+				
+
+			# This section sets up the next card
+			if self.marker >= len(self.frame)-1:
+				self.screen.clear()
+				self.screen.setText('Finished')
+				self.class_lab.setText('GIANT TEST: {}/{}'.format(self.on, self.total_amount))	
+				self.screen.repaint()
+				#self.start_butt.click()
+
+			else:	
+				self.marker += 1
+				self.screen.clear()
+				if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+
+					pixmap = GUI.QPixmap(space)
+					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
+					self.screen.setPixmap(pixmap)
+					self.screen.setScaledContents(True)
+					self.screen.repaint()
+
+				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+					helper = subprocess.call(['open' , space])
+
+				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+					playsound.playsound(space)
+
+				else:	
+					self.screen.setText(self.frame[self.marker].iloc[0])
+					self.screen.repaint()
+
+				self.on += 1
+				self.class_lab.setText('GIANT TEST: {}/{}'.format(self.on, self.total_amount))	
+			bottom_side = list(self.frame[self.marker].index)[1]
+			self.flip_button.setText(bottom_side)
+			self.flip_button.repaint()
+
+	def correct_store(self):
+		if self.screen.text() == 'Finished':
+			pass
+		else:	
+			self.flip = 0
+			try:
+				if self.flip_button.text() == 'question' or self.flip_button.text() == 'answer':
+					n_i = int(self.num_incorrect.text())
+					n_c = int(self.num_correct.text())
+					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
+					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+				else:	
+					n_i = int(self.num_incorrect.text())
+					n_c = int(self.num_correct.text())
+					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
+					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+					self.score = self.score + n_c
+					self.anti_score = self.anti_score + n_i
+
+					self.num_incorrect.clear()
+					self.num_correct.clear()
+				
+
+			except:
+				if self.flip_button.text() == 'question' or self.flip_button.text() == 'answer':
+					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + 1	
+				else:	
+					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + 1
+					self.score = self.score + 1
+					self.anti_score = self.anti_score + 1
+				
+
+			if self.marker >= len(self.frame)-1:
+				self.screen.clear()
+				self.screen.setText('Finished')
+				self.class_lab.setText('GIANT TEST: {}/{}'.format(self.on, self.total_amount))	
+				self.screen.repaint()
+
+			else:	
+				self.marker += 1
+				self.screen.clear()
+				if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+
+					pixmap = GUI.QPixmap(space)
+					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
+					self.screen.setPixmap(pixmap)
+					self.screen.setScaledContents(True)
+					self.screen.repaint()
+
+				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+					helper = subprocess.call(['open' , space])
+
+				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
+					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+					playsound.playsound(space)	
+
+				else:	
+					self.screen.setText(self.frame[self.marker].iloc[0])
+					self.screen.repaint()
+
+				self.on += 1
+				self.class_lab.setText('GIANT TEST: {}/{}'.format(self.on, self.total_amount))	
+			bottom_side = list(self.frame[self.marker].index)[1]
+			self.flip_button.setText(bottom_side)
+			self.flip_button.repaint()	
+
 #=========================================
 #	              Scoring
 #=========================================		
@@ -1909,25 +2260,27 @@ class Score_tab(Wig.QWidget):
 				
 
 	def edit(self):
+		try:
+			call_main = data_reader(self.class_name, [self.subject_name])
+			row = self.table.currentIndex().row()
+			col = self.table.currentIndex().column()
 
-		call_main = data_reader(self.class_name, [self.subject_name])
-		row = self.table.currentIndex().row()
-		col = self.table.currentIndex().column()
+			data = pd.read_csv(call_main.flashcards_path[0], index_col=0, header=0)
+			check = data.iloc[row,col].split('.')
 
-		data = pd.read_csv(call_main.flashcards_path[0], index_col=0, header=0)
-		check = data.iloc[row,col].split('.')
-
-		if check[-1] == 'png' or check[-1] == 'mov' or check[-1] == 'mp4' or check[-1] == 'MP3' or check[-1] == 'mp3':
-			space_old = '{}/{}/{}/images/{}'.format(path, self.class_name, self.subject_name, data.iloc[row,col])
-			space = '{}/{}/{}/images/{}'.format(path, self.class_name, self.subject_name, self.edit_line.toPlainText())
-			os.rename(space_old, space)
+			if check[-1] == 'png' or check[-1] == 'mov' or check[-1] == 'mp4' or check[-1] == 'MP3' or check[-1] == 'mp3':
+				space_old = '{}/{}/{}/images/{}'.format(path, self.class_name, self.subject_name, data.iloc[row,col])
+				space = '{}/{}/{}/images/{}'.format(path, self.class_name, self.subject_name, self.edit_line.toPlainText())
+				os.rename(space_old, space)
 
 			
-		data.iloc[row,col] = self.edit_line.toPlainText()
-		data.to_csv(call_main.flashcards_path[0], index=True)
+			data.iloc[row,col] = self.edit_line.toPlainText()
+			data.to_csv(call_main.flashcards_path[0], index=True)
 
-		self.change_table()
-		self.edit_line.repaint()
+			self.change_table()
+			self.edit_line.repaint()
+		except:
+			pass	
 
 	def remove_item(self):
 
@@ -2018,7 +2371,7 @@ class Home(Wig.QWidget):
 		grid_width = 700
 
 		self.switch = Wig.QComboBox(self)
-		self.switch.addItem('Today')
+		#self.switch.addItem('Today')     # Removing Today section
 		self.switch.addItem('Learning')
 		self.switch.addItem('Forgetting Test Score')
 		self.switch.addItem('Forgetting Estimated Score')
@@ -2049,28 +2402,55 @@ class Home(Wig.QWidget):
 		# Need to check all the classes and subjects to see if they
 		# qualify for the home board
 
+		# Initiate Home Screen as Learning Screen
 		try:
-			today_listed = home_reader2().today()
+			today_listed = home_reader2().learning()
 			self.setting = access_settings(R'settings.csv', change = 0)
-			goals = int(self.setting['Goals'].values[0])
-			tracker = int(self.setting['tracker'].values[0])
+			#goals = int(self.setting['Goals'].values[0])
+			#tracker = int(self.setting['tracker'].values[0])
 			font = int(self.setting['text_size'].values[0])
 
 			self.large_list.setStyleSheet('font-size: {}px'.format(font))
 
-			goals = goals - tracker
+			#goals = goals - tracker
 		
 			today_listed = today_listed.sort_values(by=['C'])
-			today_listed = today_listed.iloc[:goals]
+			#today_listed = today_listed.iloc[:goals]
 
 			self.ones = len(today_listed)
 			self.how_many.setText(str(self.ones))
 
-			for i in range(len(today_listed)):
-				learned = today_listed.iloc[i,:]
-				self.large_list.addItem('{} -- {} -- {:.2f}'.format(learned[0], learned[1], learned[2]))
+			for i, w in today_listed.iterrows():
+					
+				self.large_list.addItem('{} -- {} -- {:.2f}'.format(w['A'], w['B'], w['C']))
+
+				try:
+					self.focus = pd.read_csv(self.back_path + '/focus.csv', index_col=0, header=0)
+					for j in self.focus.values:
+						if w['A'] == j[0] and w['B'] == j[1]:
+							if j[2] == 'Green':
+								self.large_list.item(i).setBackground(Qt.Qt.green)
+
+							elif j[2] == 'Blue':
+								self.large_list.item(i).setBackground(Qt.Qt.darkBlue)
+								self.large_list.item(i).setForeground(Qt.Qt.white)
+
+							elif j[2] == 'Yellow':
+								self.large_list.item(i).setBackground(Qt.Qt.yellow)
+							
+							elif j[2] == 'Dark Green':
+								self.large_list.item(i).setBackground(Qt.Qt.darkGreen)
+							else:
+								self.large_list.item(i).setBackground(Qt.Qt.black)
+								self.large_list.item(i).setForeground(Qt.Qt.white)
+					
+				except:
+					pass			
+
 		except:
 			pass
+
+		
 
 		self.large_list.setFixedWidth(grid_width)	
 
@@ -4104,6 +4484,7 @@ class track1(Wig.QWidget):
 		self.table.repaint()
 
 #-------------------------------------------------------------------------
+#							Progress
 #-------------------------------------------------------------------------
 class TRACKING_ALL(Wig.QMainWindow):
 	def __init__(self):
@@ -4225,6 +4606,142 @@ class track2(Wig.QWidget):
 		self.sc2.draw()
 		self.repaint()
 
+#-----------------------------------------
+#					    Special Tests
+#-----------------------------------------
+class GIANT_TESTS(Wig.QMainWindow):
+	# Want to put the remove class and remove subjects windows into this window later on
+	def __init__(self):
+		super().__init__()
+		self.x, self.y, self.w, self.h = 0, 0, 900, 800
+		self.setGeometry(self.x, self.y, self.w, self.h)
+		self.setWindowTitle("Rename Class") # Window Title
+		self.window = giant_test_window()
+		self.setCentralWidget(self.window)
+
+class giant_test_window(Wig.QWidget):
+	# Goal is to make a GIANT TEST for Tutoring
+	def __init__(self):
+		super().__init__()
+
+		instructions = "This window will create and start a new test by taking cards randomly from the selected subjects. \nCards can also be manually added or removed to the test as well"
+
+		self.back_path = path.split('/')
+		self.back_path = self.back_path[:-1]
+		self.back_path = '/'.join(self.back_path)
+
+		grid = Wig.QGridLayout()
+		vlayout = Wig.QVBoxLayout(self)
+
+		label = Wig.QLabel(instructions)
+
+		self.class_map = pd.read_csv(self.back_path + '/class_map.csv', header=0, index_col=0)
+		self.data_map  = pd.read_csv(self.back_path + '/data_map.csv', header=0, index_col=0)
+		classes = self.class_map['Class'].values
+
+		self.from_class = Wig.QComboBox(self)
+		for i in classes:
+			self.from_class.addItem(i)
+
+		self.from_class.currentTextChanged.connect(self.subject_shift1)	
+
+		self.from_subject = Wig.QComboBox(self)
+		
+		self.subs1 = self.data_map['Subject'][self.data_map['Class'] == self.from_class.currentText()]
+		for i in self.subs1:
+			self.from_subject.addItem(i)
+
+		self.from_subject.currentTextChanged.connect(self.table_shift1)		
+
+		self.data1 = pd.read_csv(path + '/{}/{}/flashcards.csv'.format(self.from_class.currentText(), self.from_subject.currentText()), header=0, index_col=0)
+		self.data2 = pd.DataFrame({'Term':[], 'Definition':[], 'Correct':[], 'Incorrect':[]})
+		
+		self.model1 = TableModel(self.data1)
+
+		self.table1 = Wig.QTableView()
+		self.table1.setModel(self.model1)
+
+		test_label = Wig.QLabel('Test Cards')
+		self.table2 = Wig.QTableView()
+
+		self.move_selected = Wig.QPushButton('Move Selected')
+		self.move_selected.clicked.connect(self.move_selected_over)
+		self.how_many_random = Wig.QSpinBox()
+		self.random_over = Wig.QPushButton("Random Amount Select")
+		self.random_over.clicked.connect(self.move_over_random)
+
+		button = Wig.QPushButton('Make Test')
+		button.clicked.connect(self.make_test)
+
+		grid.addWidget(self.from_class, 0,0)
+		grid.addWidget(self.from_subject, 1,0)
+		grid.addWidget(test_label,1,2)
+		grid.addWidget(self.table1, 2,0)
+		grid.addWidget(self.table2, 2,2)
+		
+		grid.addWidget(self.how_many_random,0,1)
+		grid.addWidget(self.random_over,1,1)
+		grid.addWidget(self.move_selected, 2,1)
+
+		vlayout.addWidget(label)
+		vlayout.addLayout(grid)
+		vlayout.addWidget(button)
+
+	def subject_shift1(self):
+		self.from_subject.clear()
+		self.subs1 = self.data_map['Subject'][self.data_map['Class'] == self.from_class.currentText()]
+		for i in self.subs1:
+			self.from_subject.addItem(i)
+			
+	def table_shift1(self):
+		try:
+			self.data1 = pd.read_csv(path + '/{}/{}/flashcards.csv'.format(self.from_class.currentText(), self.from_subject.currentText()), header=0, index_col=0)
+			self.model1 = TableModel(self.data1)
+			self.table1.setModel(self.model1)
+			self.table1.repaint()
+		except:
+			pass
+
+	def move_over_random(self):
+		try:
+			value = self.how_many_random.value()
+			frame = self.data1.sample(n=value)
+			self.data2 = self.data2.append(frame)
+			self.data2 = self.data2.reset_index(drop=True)
+
+			self.model2 = TableModel(self.data2)
+			self.table2.setModel(self.model2)
+			self.table2.repaint()
+		except:
+			pass	
+
+	def move_selected_over(self):
+		try:
+			indexes = self.table1.selectionModel().selectedRows()
+			all_indexes = []
+			for i in indexes:
+				all_indexes += [i.row()]
+
+			self.transplant = self.data1.iloc[all_indexes, :]
+			self.data2 = self.data2.append(self.transplant)
+			self.data2 = self.data2.reset_index(drop=True)
+			
+			self.model2 = TableModel(self.data2)
+			self.table2.setModel(self.model2)
+			self.table2.repaint()
+
+		except:
+			pass	
+
+
+
+	def make_test(self):
+		self.data2 = self.data2.sample(frac=1)
+		self.data2 = frame_to_listframe(self.data2)
+		#print(self.data2)
+		self.w = test_for_giant_test(self.data2)
+		self.w.show()
+
 
 # May Need all of of this for compiation but running on python is too 
 # heavy for CPU to handle
@@ -4279,6 +4796,7 @@ class App(Wig.QMainWindow):
 		progressMenu = bar.addMenu('Progress')
 		machine_learning = bar.addMenu('Machine Learning')
 		data = bar.addMenu('Data')
+		special_test = bar.addMenu('Special Tests')
 
 		add_class = Wig.QAction('Add Class', self)
 		add_class.triggered.connect(self.ADD_class)
@@ -4325,6 +4843,8 @@ class App(Wig.QMainWindow):
 		data_import = Wig.QAction('Import Data', self)
 		data_import.triggered.connect(self.IMPORT_DATA)
 
+		giant_test = Wig.QAction('Big Test', self)
+		giant_test.triggered.connect(self.GIANT_TEST)
 
 		fileMenu.addAction(add_class)
 		fileMenu.addAction(add_file)
@@ -4346,6 +4866,8 @@ class App(Wig.QMainWindow):
 		data.addAction(data_import)
 
 		machine_learning.addAction(run_algorithm)
+
+		special_test.addAction(giant_test)
 		#----------------------------------------
 
 	def change_settings(self):
@@ -4455,6 +4977,10 @@ class App(Wig.QMainWindow):
 		# Doesnt work if it is the same way
 		self.w = IMPORT_data()
 		self.w.show()
+
+	def GIANT_TEST(self):
+		self.w = GIANT_TESTS()
+		self.w.show()	
 
 
 class MainWindow(Wig.QWidget):
