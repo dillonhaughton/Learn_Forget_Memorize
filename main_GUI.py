@@ -67,6 +67,13 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 
 import playsound
+import bs4
+from bs4 import BeautifulSoup
+
+# These were added may have problems here with spec file
+from fuzzywuzzy import fuzz
+from PIL import Image
+import pytesseract
 
 #from keras.models import load_model
 #=========================================
@@ -105,7 +112,12 @@ class TableModel(Qt.QAbstractTableModel):
 		
 		if role == Qt.Qt.DisplayRole:
 			value = self._data.iloc[index.row(), index.column()]
-			
+			try:
+				soup = BeautifulSoup(value, 'html.parser')
+				value = str(soup.get_text()).lstrip()
+			except:
+				pass	
+
 			return str(value)
 		
 		# Fill this with the indexs where Correct < Incorrect	
@@ -132,6 +144,83 @@ class TableModel(Qt.QAbstractTableModel):
 
 			if orientation == Qt.Qt.Vertical:
 				return str(self._data.index[section])
+
+#------------------------------------------------------------------------
+# Abstract Table output for the Display platform
+# This may require some work!
+class SearchModel(Qt.QAbstractTableModel):
+	# Trying to add color to rows that have more incorrect than correct
+	def __init__(self, data, search_for, classes, subject):
+		super(SearchModel, self).__init__()
+		self._data = data
+		self.search_for = search_for
+		self.rowscolor = []
+		#try:
+			
+		for i in range(len(self._data)):
+			term = self._data.iloc[i, 0]
+			defi = self._data.iloc[i, 1]
+
+			if term.split('.')[-1] == 'png':
+				term = pytesseract.image_to_string(Image.open('{}/{}/{}/{}/{}'.format(path, classes, subject, 'images' , term)))
+
+			if defi.split('.')[-1] == 'png':
+				defi = pytesseract.image_to_string(Image.open('{}/{}/{}/{}/{}'.format(path, classes, subject, 'images', defi)))
+
+			
+			# Need more work here. Will keep images for now since cant maintain text information	
+			ratio1 = fuzz.ratio(term.lower(), search_for.lower())
+			ratio2 = fuzz.ratio(defi.lower(), search_for.lower())
+			#print(ratio1)
+			#print(ratio2)
+			if ratio1 >= 30 or ratio2 >= 30: 
+				self.rowscolor += [i]
+			else:
+				pass	
+		#except:
+		#	pass			
+
+	def data(self, index, role):
+		#if not index.isValid():
+		#	return None
+
+		#if role == Qt.Qt.CheckStateRole:
+		#	return None
+		
+		if role == Qt.Qt.DisplayRole:
+			value = self._data.iloc[index.row(), index.column()]
+			try:
+				soup = BeautifulSoup(value, 'html.parser')
+				value = str(soup.get_text()).lstrip()
+			except:
+				pass	
+
+			return str(value)
+		
+		# Fill this with the indexs where Correct < Incorrect	
+		# Slow becuase it has to calculate this everytime. Put it outside
+		# and it should run faster
+		
+		
+		
+		if role == Qt.Qt.BackgroundRole and index.row() in self.rowscolor:
+			return Qt.QVariant(GUI.QColor(Qt.Qt.green))
+
+
+	def rowCount(self, index):
+		return self._data.shape[0]
+
+	def columnCount(self, index):
+		return self._data.shape[1]
+	
+	def headerData(self, section, orientation, role):
+		# section is the index of the column/row.
+		if role == Qt.Qt.DisplayRole:
+			if orientation == Qt.Qt.Horizontal:
+				return str(self._data.columns[section])
+
+			if orientation == Qt.Qt.Vertical:
+				return str(self._data.index[section])				
 
 
 # Abstract Table output for the Display platform
@@ -1388,7 +1477,8 @@ class add1(Wig.QWidget):
 
 		self.term_lab = Wig.QLabel('Term')
 		self.term_lab.setFixedHeight(20)
-		self.term = Wig.QLineEdit(self)
+		self.term = Wig.QTextEdit(self)
+		self.term.setFixedHeight(100)
 		self.definition_lab = Wig.QLabel('Definition')
 		self.definition_lab.setFixedHeight(20)
 		self.definition = Wig.QTextEdit(self)
@@ -1404,6 +1494,10 @@ class add1(Wig.QWidget):
 		shortcut = Wig.QShortcut(GUI.QKeySequence("Shift+Right"),self)
 		shortcut.activated.connect(self.send_material)
 
+		shortcut2 = Wig.QShortcut(GUI.QKeySequence("Ctrl+B"),self)
+		shortcut2.activated.connect(self.bold_text)
+
+
 		vlayout.addWidget(current_class_lab)
 
 		grid1.addWidget(self.term_lab,0,0)
@@ -1416,26 +1510,41 @@ class add1(Wig.QWidget):
 		vlayout.addLayout(grid1)
 		vlayout.addWidget(add_button)
 
+	def bold_text(self):
+		self.definition.setFontWeight(GUI.QFont.Bold)
+		#self.definition.setFontSize(20)
+		self.term.setFontWeight(GUI.QFont.Bold)
+		#self.term.setFontSize(20)
+
+
+
 
 	def send_material(self):
 
-		check1 = str(self.term.text())
+		check1 = str(self.term.toPlainText())
 		check2 = str(self.definition.toPlainText())
 
 		if check1 != '' or check2 != '':
 
 			call = data_writer(self.classes, self.subject)
-			call.add_flashcards(self.term.text(), self.definition.toPlainText(), self.tag)
+			# Switching to html to get bold formatting
+			if self.tag != [0,0]:
+				call.add_flashcards(self.term.toPlainText(), self.definition.toPlainText(), self.tag)
+			else:
+				call.add_flashcards(self.term.toHtml(), self.definition.toHtml(), self.tag)
 			self.term.clear()
 			self.term.repaint()
 			self.definition.clear()
 			self.definition.repaint()
 
 			self.tag = [0,0]
+			self.term.setFontWeight(GUI.QFont.Normal)
+			self.definition.setFontWeight(GUI.QFont.Normal)
 
 		else:
 			self.w = alert_win('Error: Not enough content')
 			self.w.show()
+
 
 
 	def add_file_button1(self):
@@ -1917,12 +2026,12 @@ class test_for_giant_test1(Wig.QWidget):
 			self.marker = 0
 			self.flip   = 0
 
-			bottom_side = list(self.frame[self.marker].index)[1]
+			bottom_side = list(self.frame[self.marker].index)[3]
 			self.flip_button.setText(bottom_side)
 			self.flip_button.repaint()
 				# Now I need the screen to recognize pdfs based on path
-			if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
-				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+			if self.frame[self.marker].iloc[2].split('.')[-1] == 'png':
+				space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 
 				pixmap = GUI.QPixmap(space)
 				pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
@@ -1930,16 +2039,16 @@ class test_for_giant_test1(Wig.QWidget):
 				self.screen.setScaledContents(True)
 				self.screen.repaint()
 
-			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
-				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+			elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[2].split('.')[-1] == 'mp4':
+				space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 				helper = subprocess.call(['open' , space])
 
-			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
-				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+			elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[2].split('.')[-1] == 'MP3':
+				space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 				playsound.playsound(space)
 				
 			else:	
-				self.screen.setText(self.frame[self.marker].iloc[0])
+				self.screen.setText(self.frame[self.marker].iloc[2])
 				self.screen.repaint()
 			self.on += 1	
 
@@ -1958,8 +2067,8 @@ class test_for_giant_test1(Wig.QWidget):
 
 	def flipper(self):
 		if self.flip == 0:
-			if self.frame[self.marker].iloc[1].split('.')[-1] == 'png':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[1])
+			if self.frame[self.marker].iloc[3].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[3])
 
 					pixmap = GUI.QPixmap(space)
 					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
@@ -1967,27 +2076,27 @@ class test_for_giant_test1(Wig.QWidget):
 					self.screen.setScaledContents(True)
 					self.screen.repaint()
 
-			elif self.frame[self.marker].iloc[1].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[1].split('.')[-1] == 'mp4':
+			elif self.frame[self.marker].iloc[3].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[3].split('.')[-1] == 'mp4':
 				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[1])
 				helper = subprocess.call(['open' , space])	
 
-			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[1].split('.')[-1] == 'MP3':
+			elif self.frame[self.marker].iloc[3].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[3].split('.')[-1] == 'MP3':
 				# Problems with different langauge paths
-				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[1])
+				space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[3])
 				playsound.playsound(space)	
 
 			else:	
-				self.screen.setText(self.frame[self.marker].iloc[1])
+				self.screen.setText(self.frame[self.marker].iloc[3])
 				self.screen.repaint()
 
-			top_side = list(self.frame[self.marker].index)[0]
+			top_side = list(self.frame[self.marker].index)[2]
 			self.flip_button.setText(top_side)
 			self.flip_button.repaint()
 			self.flip = 1
 
 		else:
-			if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+			if self.frame[self.marker].iloc[2].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 
 					pixmap = GUI.QPixmap(space)
 					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
@@ -1995,18 +2104,18 @@ class test_for_giant_test1(Wig.QWidget):
 					self.screen.setScaledContents(True)
 					self.screen.repaint()
 
-			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
-				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+			elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[2].split('.')[-1] == 'mp4':
+				space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 				helper = subprocess.call(['open' , space])
 
-			elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
-				space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+			elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[2].split('.')[-1] == 'MP3':
+				space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 				playsound.playsound(space)	
 						
 			else:	
-				self.screen.setText(self.frame[self.marker].iloc[0])
+				self.screen.setText(self.frame[self.marker].iloc[2])
 				self.screen.repaint()
-			bottom_side = list(self.frame[self.marker].index)[1]
+			bottom_side = list(self.frame[self.marker].index)[3]
 			self.flip_button.setText(bottom_side)
 			self.flip_button.repaint()
 			self.flip = 0
@@ -2022,13 +2131,13 @@ class test_for_giant_test1(Wig.QWidget):
 					# OUTDATED no questions or answers anymore
 					n_i = int(self.num_incorrect.text())
 					n_c = int(self.num_correct.text())
-					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
-					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+					self.frame[self.marker].iloc[5] = self.frame[self.marker].iloc[5] + n_i
+					self.frame[self.marker].iloc[4] = self.frame[self.marker].iloc[4] + n_c
 				else:	
 					n_i = int(self.num_incorrect.text())
 					n_c = int(self.num_correct.text())
-					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
-					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+					self.frame[self.marker].iloc[5] = self.frame[self.marker].iloc[5] + n_i
+					self.frame[self.marker].iloc[4] = self.frame[self.marker].iloc[4] + n_c
 					self.score = self.score + n_c
 					self.anti_score = self.anti_score + n_i
 
@@ -2038,9 +2147,9 @@ class test_for_giant_test1(Wig.QWidget):
 
 			except:
 				if self.flip_button.text() == 'question' or self.flip_button.text() == 'answer':
-					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + 1
+					self.frame[self.marker].iloc[5] = self.frame[self.marker].iloc[5] + 1
 				else:	
-					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + 1
+					self.frame[self.marker].iloc[5] = self.frame[self.marker].iloc[5] + 1
 					self.anti_score = self.anti_score + 1
 				
 
@@ -2055,8 +2164,8 @@ class test_for_giant_test1(Wig.QWidget):
 			else:	
 				self.marker += 1
 				self.screen.clear()
-				if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				if self.frame[self.marker].iloc[2].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 
 					pixmap = GUI.QPixmap(space)
 					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
@@ -2064,21 +2173,21 @@ class test_for_giant_test1(Wig.QWidget):
 					self.screen.setScaledContents(True)
 					self.screen.repaint()
 
-				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[2].split('.')[-1] == 'mp4':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 					helper = subprocess.call(['open' , space])
 
-				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[2].split('.')[-1] == 'MP3':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 					playsound.playsound(space)
 
 				else:	
-					self.screen.setText(self.frame[self.marker].iloc[0])
+					self.screen.setText(self.frame[self.marker].iloc[2])
 					self.screen.repaint()
 
 				self.on += 1
 				self.class_lab.setText('GIANT TEST: {}/{}'.format(self.on, self.total_amount))	
-			bottom_side = list(self.frame[self.marker].index)[1]
+			bottom_side = list(self.frame[self.marker].index)[3]
 			self.flip_button.setText(bottom_side)
 			self.flip_button.repaint()
 
@@ -2091,13 +2200,13 @@ class test_for_giant_test1(Wig.QWidget):
 				if self.flip_button.text() == 'question' or self.flip_button.text() == 'answer':
 					n_i = int(self.num_incorrect.text())
 					n_c = int(self.num_correct.text())
-					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
-					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+					self.frame[self.marker].iloc[5] = self.frame[self.marker].iloc[5] + n_i
+					self.frame[self.marker].iloc[4] = self.frame[self.marker].iloc[4] + n_c
 				else:	
 					n_i = int(self.num_incorrect.text())
 					n_c = int(self.num_correct.text())
-					self.frame[self.marker].iloc[3] = self.frame[self.marker].iloc[3] + n_i
-					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + n_c
+					self.frame[self.marker].iloc[5] = self.frame[self.marker].iloc[5] + n_i
+					self.frame[self.marker].iloc[4] = self.frame[self.marker].iloc[4] + n_c
 					self.score = self.score + n_c
 					self.anti_score = self.anti_score + n_i
 
@@ -2107,9 +2216,9 @@ class test_for_giant_test1(Wig.QWidget):
 
 			except:
 				if self.flip_button.text() == 'question' or self.flip_button.text() == 'answer':
-					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + 1	
+					self.frame[self.marker].iloc[4] = self.frame[self.marker].iloc[4] + 1	
 				else:	
-					self.frame[self.marker].iloc[2] = self.frame[self.marker].iloc[2] + 1
+					self.frame[self.marker].iloc[4] = self.frame[self.marker].iloc[4] + 1
 					self.score = self.score + 1
 					self.anti_score = self.anti_score + 1
 				
@@ -2123,8 +2232,8 @@ class test_for_giant_test1(Wig.QWidget):
 			else:	
 				self.marker += 1
 				self.screen.clear()
-				if self.frame[self.marker].iloc[0].split('.')[-1] == 'png':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				if self.frame[self.marker].iloc[2].split('.')[-1] == 'png':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 
 					pixmap = GUI.QPixmap(space)
 					pixmap = pixmap.scaled(800, 800, aspectRatioMode=1)
@@ -2132,21 +2241,21 @@ class test_for_giant_test1(Wig.QWidget):
 					self.screen.setScaledContents(True)
 					self.screen.repaint()
 
-				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[0].split('.')[-1] == 'mp4':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mov' or self.frame[self.marker].iloc[2].split('.')[-1] == 'mp4':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 					helper = subprocess.call(['open' , space])
 
-				elif self.frame[self.marker].iloc[0].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[0].split('.')[-1] == 'MP3':
-					space = '{}/{}/{}/images/{}'.format(path, self.call_classes, self.call_subject, self.frame[self.marker].iloc[0])
+				elif self.frame[self.marker].iloc[2].split('.')[-1] == 'mp3' or self.frame[self.marker].iloc[2].split('.')[-1] == 'MP3':
+					space = '{}/{}/{}/images/{}'.format(path, self.frame[self.marker].iloc[0], self.frame[self.marker].iloc[1], self.frame[self.marker].iloc[2])
 					playsound.playsound(space)	
 
 				else:	
-					self.screen.setText(self.frame[self.marker].iloc[0])
+					self.screen.setText(self.frame[self.marker].iloc[2])
 					self.screen.repaint()
 
 				self.on += 1
 				self.class_lab.setText('GIANT TEST: {}/{}'.format(self.on, self.total_amount))	
-			bottom_side = list(self.frame[self.marker].index)[1]
+			bottom_side = list(self.frame[self.marker].index)[3]
 			self.flip_button.setText(bottom_side)
 			self.flip_button.repaint()	
 
@@ -2178,8 +2287,9 @@ class Score_tab(Wig.QWidget):
 		self.subject_wheel = Wig.QLabel(subjects)
 		self.subject_wheel.setAlignment(Qt.Qt.AlignCenter)
 
-		self.types = Wig.QComboBox(self)
-		self.types.addItem('Flashcards')
+		self.types = Wig.QLineEdit(self)
+		self.search = Wig.QPushButton('Search')
+		self.search.clicked.connect(self.search_for)
 
 		self.table = Wig.QTableView()
 		self.change_table()
@@ -2193,6 +2303,9 @@ class Score_tab(Wig.QWidget):
 		self.edit_line.setFixedHeight(200)
 		self.edit_button = Wig.QPushButton('Edit')
 
+		shortcut = Wig.QShortcut(GUI.QKeySequence("Ctrl+B"),self)
+		shortcut.activated.connect(self.bold_text)
+
 		self.edit_button.clicked.connect(self.edit)
 
 		self.remove_button = Wig.QPushButton('Remove (Please select from Row 1)')
@@ -2201,30 +2314,48 @@ class Score_tab(Wig.QWidget):
 		vlayout.addWidget(self.class_wheel)
 		vlayout.addWidget(self.subject_wheel)
 		vlayout.addWidget(self.types)
+		vlayout.addWidget(self.search)
 		vlayout.addWidget(self.table)
 		vlayout.addWidget(self.edit_line)
 		vlayout.addWidget(self.edit_button)
 		vlayout.addWidget(self.remove_button)
 
+	def bold_text(self):
+		self.edit_line.setFontWeight(GUI.QFont.Bold)
+		#self.definition.setFontSize(20)
+		
+
 	def fill_base(self, selected, deselected):
 		# Updated to work with button click
-		for i in selected.indexes():
-			self.edit_line.setText(i.data())
-		self.edit_line.repaint()
+		try:
+			for i in selected.indexes():
+				row = i.row()
+				col = i.column()
+				try:
+					self.edit_line.setHtml(self.data.iloc[row, col])
+				except:
+					self.edit_line.setText(self.data.iloc[row, col])	
+			self.edit_line.repaint()
+		except:
+			pass	
 
 	def fill_base_click(self, link):
-		text = link.data()
-		self.edit_line.setText(text)
-		self.edit_line.repaint()
+		try:
+			row = link.row()
+			col = link.column()
+			self.edit_line.setHtml(self.data.iloc[row, col])
+			self.edit_line.repaint()
+		except:
+			pass	
 
 	def change_table(self): 
 		try:
 			class_name = self.class_wheel.text()
 			subject_name = self.subject_wheel.text()
-			type_name = self.types.currentText()
 
 			call_main = data_reader(class_name, [subject_name])
 			self.data = pd.read_csv(call_main.flashcards_path[0], index_col=0, header=0)
+
 			
 			#self.table = Wig.QTableView()
 			self.model = TableModel(self.data)
@@ -2274,7 +2405,7 @@ class Score_tab(Wig.QWidget):
 				os.rename(space_old, space)
 
 			
-			data.iloc[row,col] = self.edit_line.toPlainText()
+			data.iloc[row,col] = self.edit_line.toHtml()
 			data.to_csv(call_main.flashcards_path[0], index=True)
 
 			self.change_table()
@@ -2284,76 +2415,75 @@ class Score_tab(Wig.QWidget):
 
 	def remove_item(self):
 
+		indexes = self.table.selectionModel().selectedRows()
+		all_indexes = []
+		for i in indexes:
+			all_indexes += [i.row()]
+
 		# Want to change this to remove when multiple things in the row
-		call = data_reader(self.class_name, [self.subject_name])
-		row = self.table.currentIndex().row()
-		col = self.table.currentIndex().column()
-
-		text = self.table.currentIndex().data()
 		
-		category = self.types.currentText()
+		#row = self.table.currentIndex().row()
+		#col = self.table.currentIndex().column()
 
-		if category == 'Flashcards':
-			data = pd.read_csv(call.flashcards_path[0], index_col=0, header=0)
-			call_it = data[data['Term'] == text]
-			check_1 = call_it['Term'].values[0]
-			check_2 = call_it['Definition'].values[0]
+		#text = self.table.currentIndex().data()
+		
+		#category = self.types.currentText()
+		call = data_reader(self.class_name, [self.subject_name])
 
-			check1 = check_1.split('.')
-			check2 = check_2.split('.')
+		#if category == 'Flashcards':
+		data = pd.read_csv(call.flashcards_path[0], index_col=0, header=0)
+		call_it = data.iloc[all_indexes, :]
+		check_1 = call_it['Term'].values
+		check_2 = call_it['Definition'].values
 
+		#check1 = check_1.split('.')
+		#check2 = check_2.split('.')
+
+		for i in check_1:
+			check1 = i.split('.')
 			if check1[-1] == 'png' or check1[-1] == 'mov' or check1[-1] == 'mp4':
-				image1 = path + '/{}/{}/images/{}'.format(self.class_name, self.subject_name, check_1)
+				image1 = path + '/{}/{}/images/{}'.format(self.class_name, self.subject_name, i)
 				os.remove(image1)
 
+		for i in check_2:		
+			check2 = i.split('.')
 			if check2[-1] == 'png' or check2[-1] == 'mov' or check2[-1] == 'mp4':
-				image1 = path + '/{}/{}/images/{}'.format(self.class_name, self.subject_name, check_2)
+				image1 = path + '/{}/{}/images/{}'.format(self.class_name, self.subject_name, i)
 				os.remove(image1)
 
-			new_data = data[data['Term'] != text]
+
+		new_data = data.drop(self.data.index[all_indexes])	
 			
-			new_data = new_data.reset_index(drop=True)
-			new_data.to_csv(call.flashcards_path[0], index=True)
-
-		elif category == 'Diagrams':
-			# OUTDATED
-			# Want these to remove the image from the image folder as well
-
-			data = pd.read_csv(call.diagrams_path[0], index_col=0, header=0)
-			get  = data[data['image path'] == text]
-			get  = get['image correct path'].values[0]
-			new_data = data[data['image path'] != text]
-			new_data = new_data.reset_index(drop=True)
-			new_data.to_csv(call.diagrams_path[0], index=True)
-
-			image1 = path + '/{}/{}/images/{}'.format(self.class_name, self.subject_name, text)
-			image2 = path + '/{}/{}/images/{}'.format(self.class_name, self.subject_name, get)
-
-			os.remove(image1)
-			os.remove(image2)
-
-
-		elif category == 'Drawings':
-			#OUTDATED
-			# Want these to remove the image from the image folder as well
-			data = pd.read_csv(call.drawings_path[0], index_col=0, header=0)
-			get  = data[data['To Draw'] == text]
-			get  = get['Correct Image'].values[0]
-			new_data = data[data['To Draw'] != text]
-			new_data = new_data.reset_index(drop=True)
-			new_data.to_csv(call.drawings_path[0], index=True)
-
-			image2 = path + '/{}/{}/images/{}'.format(self.class_name, self.subject_name, get)
-			os.remove(image2)
-
-		else:
-			# OUTDATED
-			data = pd.read_csv(call.practice_path[0], index_col=0, header=0)
-			new_data = data[data['question'] != text]
-			new_data = new_data.reset_index(drop=True)
-			new_data.to_csv(call.practice_path[0], index=True)
+		new_data = new_data.reset_index(drop=True)
+		new_data.to_csv(call.flashcards_path[0], index=True)
 
 		self.change_table()	
+
+	def search_for(self):
+		try:
+			class_name = self.class_wheel.text()
+			subject_name = self.subject_wheel.text()
+
+			call_main = data_reader(class_name, [subject_name])
+			self.data = pd.read_csv(call_main.flashcards_path[0], index_col=0, header=0)
+
+			
+			#self.table = Wig.QTableView()
+			self.model = SearchModel(self.data, self.types.text(), class_name, subject_name)
+			self.table.setModel(self.model)
+			self.selection_Model = self.table.selectionModel()
+			self.selection_Model.selectionChanged.connect(self.fill_base)
+			self.table.repaint()
+
+		except:
+			pass
+		#	self.data = pd.DataFrame({'Blank':[]})
+		#	self.model = TableModel(self.data)
+		#	self.table.setModel(self.model)	
+			
+		#	self.selection_Model = self.table.selectionModel()
+		#	self.selection_Model.selectionChanged.connect(self.fill_base)
+		#	self.table.repaint()
 	
 #=========================================
 #	            Home Tab
@@ -2403,8 +2533,12 @@ class Home(Wig.QWidget):
 		# qualify for the home board
 
 		# Initiate Home Screen as Learning Screen
+
+		
 		try:
 			today_listed = home_reader2().learning()
+			today_listed = today_listed.sort_values(by=['C'])
+			today_listed = today_listed.reset_index(drop=True)
 			self.setting = access_settings(R'settings.csv', change = 0)
 			#goals = int(self.setting['Goals'].values[0])
 			#tracker = int(self.setting['tracker'].values[0])
@@ -2414,7 +2548,7 @@ class Home(Wig.QWidget):
 
 			#goals = goals - tracker
 		
-			today_listed = today_listed.sort_values(by=['C'])
+			#today_listed = today_listed.sort_values(by=['C'])
 			#today_listed = today_listed.iloc[:goals]
 
 			self.ones = len(today_listed)
@@ -2427,6 +2561,7 @@ class Home(Wig.QWidget):
 				try:
 					self.focus = pd.read_csv(self.back_path + '/focus.csv', index_col=0, header=0)
 					for j in self.focus.values:
+						
 						if w['A'] == j[0] and w['B'] == j[1]:
 							if j[2] == 'Green':
 								self.large_list.item(i).setBackground(Qt.Qt.green)
@@ -2437,7 +2572,7 @@ class Home(Wig.QWidget):
 
 							elif j[2] == 'Yellow':
 								self.large_list.item(i).setBackground(Qt.Qt.yellow)
-							
+						
 							elif j[2] == 'Dark Green':
 								self.large_list.item(i).setBackground(Qt.Qt.darkGreen)
 							else:
@@ -2450,7 +2585,7 @@ class Home(Wig.QWidget):
 		except:
 			pass
 
-		
+
 
 		self.large_list.setFixedWidth(grid_width)	
 
@@ -4654,7 +4789,7 @@ class giant_test_window(Wig.QWidget):
 		self.from_subject.currentTextChanged.connect(self.table_shift1)		
 
 		self.data1 = pd.read_csv(path + '/{}/{}/flashcards.csv'.format(self.from_class.currentText(), self.from_subject.currentText()), header=0, index_col=0)
-		self.data2 = pd.DataFrame({'Term':[], 'Definition':[], 'Correct':[], 'Incorrect':[]})
+		self.data2 = pd.DataFrame({'Class':[], 'Subject':[], 'Term':[], 'Definition':[], 'Correct':[], 'Incorrect':[]})
 		
 		self.model1 = TableModel(self.data1)
 
@@ -4706,6 +4841,12 @@ class giant_test_window(Wig.QWidget):
 		try:
 			value = self.how_many_random.value()
 			frame = self.data1.sample(n=value)
+			to_know = len(frame)
+			from_c = self.from_class.currentText()
+			from_s = self.from_subject.currentText()
+			frame.insert(0,'Class',[from_c]*to_know)
+			frame.insert(1,'Subject',[from_s]*to_know)
+			
 			self.data2 = self.data2.append(frame)
 			self.data2 = self.data2.reset_index(drop=True)
 
@@ -4717,12 +4858,19 @@ class giant_test_window(Wig.QWidget):
 
 	def move_selected_over(self):
 		try:
+		
 			indexes = self.table1.selectionModel().selectedRows()
 			all_indexes = []
 			for i in indexes:
 				all_indexes += [i.row()]
 
 			self.transplant = self.data1.iloc[all_indexes, :]
+			to_know = len(self.transplant)
+			from_c = self.from_class.currentText()
+			from_s = self.from_subject.currentText()
+			self.transplant.insert(0,'Class',[from_c]*to_know)
+			self.transplant.insert(1,'Subject',[from_s]*to_know)
+
 			self.data2 = self.data2.append(self.transplant)
 			self.data2 = self.data2.reset_index(drop=True)
 			

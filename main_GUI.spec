@@ -1,10 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+
 block_cipher = None
 
 
 a = Analysis(['main_GUI.py'],
-             pathex=['/Users/dillonhaughton/Desktop/Documents/Coding/Projects/Study/APP_Development/Learn_Forget_Memorize'],
+             pathex=[],
              binaries=[],
              datas=[('button/add.png','button'),
 		   ('button/edit.png','button'),
@@ -29,8 +30,9 @@ a = Analysis(['main_GUI.py'],
 		   ('Files/settings.csv', '.'),
 		   ('Files/time_lapse.csv', '.')
 	     ],
-             hiddenimports=[],
+             hiddenimports=['sklearn.utils._typedefs'],
              hookspath=[],
+             hooksconfig={},
              runtime_hooks=[],
              excludes=[],
              win_no_prefer_redirects=False,
@@ -39,6 +41,7 @@ a = Analysis(['main_GUI.py'],
              noarchive=False)
 pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)
+
 exe = EXE(pyz,
           a.scripts,
           [('W ignore', None, 'OPTION')],
@@ -49,6 +52,7 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           console=False )
+
 coll = COLLECT(exe,
                a.binaries,
                a.zipfiles,
@@ -57,6 +61,7 @@ coll = COLLECT(exe,
                upx=True,
                upx_exclude=[],
                name='Study_Help')
+
 app = BUNDLE(coll,
              name='LFM.app',
              icon='button/mister.icns',
